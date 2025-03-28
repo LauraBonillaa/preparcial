@@ -1,124 +1,172 @@
-const express = require("express");
-const path = require("path");
-const { Server } = require("socket.io");
-const { createServer } = require("http");
+const socket = io("http://localhost:5050", { path: "/rea-time" });
 
-const app = express();
-const httpServer = createServer(app);
+document.getElementById("register-btn").addEventListener("click", registerUser);
+document.getElementById("scream-btn").addEventListener("click", sendScream);
+document.getElementById("get-btn").addEventListener("click", getUsers);
 
-const io = new Server(httpServer, {
-  path: "/rea-time",
-  cors: {
-    origin: "*",
-  },
-});
+document.getElementById("scream-btn").style.display = "none";
 
-app.use(express.json());
-app.use("/", express.static(path.join(__dirname, "app1")));
 
-let users = [];
-let rolesDisponibles = ["Marco", "Polo", "Polo Especial"];
-let gritosdepolos = []
 
-app.get("/users", (req, res) => {
-  res.json(users);
-});
+function registerUser() {
+    const nameInput = document.querySelector("#name");
+    const name = nameInput.value.trim();
 
-app.post("/users", (req, res) => {
-  const { name } = req.body;
-
-  if (!name) {
-    return res.status(400).json({ success: false, message: "El nombre es requerido." });
-  }
-
-  if (users.some((user) => user.name === name)) {
-    return res.status(400).json({ success: false, message: "El nombre ya está en uso." });
-  }
-
-  if (rolesDisponibles.length === 0) {
-    rolesDisponibles = ["Marco", "Polo", "Polo Especial"];
-  }
-
-  const assignedRoleIndex = Math.floor(Math.random() * rolesDisponibles.length);
-  const assignedRole = rolesDisponibles.splice(assignedRoleIndex, 1)[0];
-
-  const user = { id: Date.now(), name, role: assignedRole, socketId: null };
-  users.push(user);
-
-  console.log("Usuarios registrados:", users);
-
-  res.json({ success: true, message: "Usuario registrado con éxito.", role: assignedRole });
-});
-
-io.on("connection", (socket) => {
-  console.log("Nuevo usuario conectado:", socket.id);
-
-  socket.on("registrar-socket", (userName) => {
-    const user = users.find((u) => u.name === userName);
-    if (user) {
-      user.socketId = socket.id;
-    }
-    io.emit("usuarios-actualizados", users.length);
-  });
-
-  app.post("/gritar", (req, res) => {
-    const { name } = req.body;
-    const user = users.find((u) => u.name === name);
-
-    if (user) {
-      if (user.role === "Marco") {
-        console.log(`${user.name} gritó: ¡Marco!`);
-        io.emit("coordenadas", { message: `¡Marco!` });
-      } else if (user.role === "Polo" || user.role === "Polo Especial") {
-        console.log(`${user.name} respondió: ¡Polo!`);
-        gritosdepolos.push({ role: user.role,name: user.name, message: "¡Polo!" });
-        io.emit("gritos-polos-actualizados", gritosdepolos);
-      }
+    if (!name) {
+        alert("Por favor, ingresa un nombre válido.");
+        return;
     }
 
-    res.json({ success: true, message: "Grito enviado." });
-  });
+    fetch("http://localhost:5050/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+    })
+    .then((response) => response.json())
+    .then((data) => {
+        if (data.success) {
+            sessionStorage.setItem("username", name);
+            sessionStorage.setItem("role", data.role);
+            alert(data.message);
+            nameInput.value = "";
 
-  console.log(gritosdepolos)
+            document.getElementById("nickname").textContent = name;
+            document.getElementById("personaje").textContent = data.role;
 
-  socket.on("resultado-juego", (resultado) => {
-    io.emit("mostrar-resultado", resultado);
-  });
+            document.getElementById("register-section").style.display = "none";
+            document.getElementById("game-section").style.display = "block";
+            
+            if (data.role === "Marco") {
+                const marcoDiv = document.createElement("div");
+                marcoDiv.id = "gritos-marco";
+                document.body.appendChild(marcoDiv);
+            } else {
+                const PolosDiv = document.createElement("div");
+                PolosDiv.id = "gritos-polos";
+                document.body.appendChild(PolosDiv);
+            }
+        
+            socket.emit("registrar-socket", name);
+        } else {
+            alert(data.message);
+        }
+    })
+    .catch((error) => console.error("Error:", error));
+}
 
-  socket.on("coordenadas", (data) => {
-    const user = users.find((u) => u.socketId === socket.id);
+document.addEventListener("DOMContentLoaded", () => {
+    const storedName = sessionStorage.getItem("username");
+    const storedRole = sessionStorage.getItem("role");
 
-    if (user) {
-      if (user.role === "Marco") {
-        console.log(`${user.name} gritó: ¡Marco!`);
-        io.emit("coordenadas", { message: `${user.name} gritó: ¡Marco!` });
-      } else if (user.role === "Polo" || user.role === "Polo Especial") {
-        console.log(`${user.name} respondió: ¡Polo!`);
-        gritosdepolos.push({ name: user.name, message: "¡Polo!" });
-        io.emit("coordenadas", { message: `${user.name} gritó: ¡Polo!` });
-      }
+    if (storedName && storedRole) {
+        document.getElementById("nickname").textContent = storedName;
+        document.getElementById("personaje").textContent = storedRole;
+
+        document.getElementById("register-section").style.display = "none";
+        document.getElementById("game-section").style.display = "block";
+
+        socket.emit("registrar-socket", storedName);
+    } else {
+        document.getElementById("register-section").style.display = "block";
+        document.getElementById("game-section").style.display = "none";
     }
-  });
-
-
-
-  socket.on("notificar-a-todos", (mensaje) => {
-    io.emit("notificacion", { message: mensaje });
-  });
-
-  socket.on("disconnect", () => {
-    const userIndex = users.findIndex(user => user.socketId === socket.id);
-    if (userIndex !== -1) {
-
-      rolesDisponibles.push(users[userIndex].role);
-      users.splice(userIndex, 1);
-    }
-
-    console.log(`Usuario desconectado: ${socket.id}`);
-    io.emit("usuarios-actualizados", users.length);
-  });
 });
 
-httpServer.listen(5050, () => {
-  console.log("Servidor corriendo en http://localhost:5050");
+function getUsers() {
+    fetch("http://localhost:5050/users")
+        .then((response) => response.json())
+        .then((data) => console.log("Usuarios registrados:", data))
+        .catch((error) => console.error("Error:", error));
+}
+
+function sendScream() {
+    const name = sessionStorage.getItem("username");
+    const role = sessionStorage.getItem("role");
+
+    if (role) {
+        fetch("http://localhost:5050/gritar", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name }),
+        })
+        .then((response) => response.json())
+        .then((data) => {
+            if (!data.success) {
+                alert(data.message);
+            }
+        })
+        .catch((error) => console.error("Error:", error));
+    } else {
+        alert("No se pudo gritar");
+    }
+}
+
+
+socket.on("coordenadas", (data) => {
+    const gritosDiv = document.getElementById("gritos-polos");
+    
+    if (gritosDiv) {
+        const nuevoGrito = document.createElement("p");
+        nuevoGrito.textContent = data.message;
+        gritosDiv.appendChild(nuevoGrito);
+    }
+});
+
+socket.on("gritos-polos-actualizados", (gritos) => {
+    const gritosMarcoDiv = document.getElementById("gritos-marco");
+
+    if (gritosMarcoDiv) {
+        gritosMarcoDiv.innerHTML = ""; 
+
+        gritos.forEach((grito, index) => {
+            const nuevoGrito = document.createElement("button");
+            nuevoGrito.textContent = `${grito.message}`;
+            nuevoGrito.id = `grito-${grito.role}-${grito.id}`; 
+        
+           
+            nuevoGrito.setAttribute("data-role", grito.role);
+            nuevoGrito.setAttribute("data-id", grito.id);
+        
+            nuevoGrito.addEventListener("click", () => {
+        
+                const resultado = (grito.role === "Polo Especial") 
+                    ? { message: "🎉 ¡Ganó Marco! 🎉", color: "green" }
+                    : { message: "😢 Perdió Marco 😢", color: "red" };
+            
+
+                socket.emit("resultado-juego", resultado);
+            });
+            
+            
+        console.log(grito.rol)
+            gritosMarcoDiv.appendChild(nuevoGrito);
+        });
+        
+    }
+});
+
+socket.on("mostrar-resultado", (resultado) => {
+    const ganador = document.getElementById("ganador");
+    if (ganador) {
+        ganador.innerHTML = `<p style="color: ${resultado.color};">${resultado.message}</p>`;
+    }
+});
+
+
+socket.on("ocultar-grito", () => {
+    console.log("Tu grito no se mostrará.");
+});
+
+socket.on("usuarios-actualizados", (numUsuarios) => {
+    const usuariosConectados = numUsuarios + 1; 
+
+    console.log(`Usuarios conectados: ${usuariosConectados}`);
+
+    const screamBtn = document.getElementById("scream-btn");
+
+    if (usuariosConectados >= 3) {
+        screamBtn.style.display = "block";
+    } else {
+        screamBtn.style.display = "none";
+    }
 });

@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>APP 1</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+    <!-- Sección de Registro -->
+    <section id="register-section">
+        <h1>Register</h1>
+        <input placeholder="Ingresa tu nombre" id="name"/>
+        <button id="register-btn">Entrar al juego</button>
+    </section>
+
+    <!-- Sección del Juego (Oculta por defecto) -->
+    <section id="game-section" style="display: none;">
+        <button id="get-btn">GET</button>
+        <button id="event-btn">Send event</button>
+
+        <h1>Marco - Polo</h1>
+        <p id="nickname"></p>
+        <h1>Tu eres:</h1>
+        <h1 id="personaje"></h1>
+        <p id="gritos"></p>
+        <div id="polos"></div>
+        <button id="scream-btn">Gritar</button>
+        <button id="get-btn">GET</button>
+        <p id="ganador"></p>
+    </section>
+
+    <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
+    <script src="index.js"></script>
+
+</body>
+</html>
